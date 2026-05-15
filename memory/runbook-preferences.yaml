@@ -1,0 +1,11 @@
+version: 1
+updated_at: '2026-05-15T00:00:00.000Z'
+preferred_template: incident-response
+naming_convention: '{date}-{system}-{type}'
+default_fields: {}
+always_include: []
+always_exclude: []
+pattern_counts: {}
+formatting:
+  date_format: YYYY-MM-DD
+  use_checkboxes: true

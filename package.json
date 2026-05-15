@@ -1,0 +1,24 @@
+{
+  "name": "security-runbook-generator",
+  "version": "1.0.0",
+  "description": "Minimal file-based CLI for security runbook generation with lightweight learning",
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "runbook",
+  "bin": {
+    "runbook": "./runbook"
+  },
+  "scripts": {
+    "start": "node ./runbook new",
+    "init": "node ./runbook init",
+    "templates": "node ./runbook templates",
+    "memory": "node ./runbook memory --show"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0",
+    "mustache": "^4.2.0"
+  }
+}

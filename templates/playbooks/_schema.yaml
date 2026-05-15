@@ -1,0 +1,111 @@
+templates:
+  incident-response:
+    description: Security incident response runbook
+    variables:
+      runbook_name:
+        type: text
+        label: Runbook Name
+        required: true
+      date:
+        type: text
+        label: Date (YYYY-MM-DD)
+        required: true
+      severity:
+        type: select
+        label: Severity (Low/Medium/High/Critical)
+        options: [Low, Medium, High, Critical]
+        default: High
+        required: true
+        memory_safe: true
+      lead:
+        type: text
+        label: Incident Lead (email)
+        required: true
+        memory_safe: true
+      affected_system:
+        type: text
+        label: Affected System
+        required: true
+      include_escalation:
+        type: boolean
+        label: Include Escalation Matrix? (y/n)
+        default: true
+        memory_safe: true
+      summary:
+        type: multiline
+        label: Summary
+        required: true
+      containment_steps:
+        type: list
+        label: Containment Steps (comma-separated)
+        required: true
+      recovery_steps:
+        type: list
+        label: Recovery Steps (comma-separated)
+        required: true
+
+  vulnerability-management:
+    description: Vulnerability triage and remediation runbook
+    variables:
+      runbook_name:
+        type: text
+        label: Runbook Name
+        required: true
+      date:
+        type: text
+        label: Date (YYYY-MM-DD)
+        required: true
+      owner:
+        type: text
+        label: Owner
+        required: true
+      risk_level:
+        type: select
+        label: Risk Level (Low/Medium/High/Critical)
+        options: [Low, Medium, High, Critical]
+        default: Medium
+        required: true
+      systems_in_scope:
+        type: list
+        label: Systems In Scope (comma-separated)
+        required: true
+      triage_notes:
+        type: multiline
+        label: Triage Notes
+        required: true
+      remediation_actions:
+        type: list
+        label: Remediation Actions (comma-separated)
+        required: true
+
+  access-review:
+    description: Periodic access and permissions review runbook
+    variables:
+      runbook_name:
+        type: text
+        label: Runbook Name
+        required: true
+      date:
+        type: text
+        label: Date (YYYY-MM-DD)
+        required: true
+      review_owner:
+        type: text
+        label: Review Owner
+        required: true
+      business_unit:
+        type: text
+        label: Business Unit
+        required: true
+      review_scope:
+        type: list
+        label: Review Scope (comma-separated)
+        required: true
+      findings:
+        type: multiline
+        label: Findings
+        required: true
+      follow_up_actions:
+        type: list
+        label: Follow-up Actions (comma-separated)
+        required: true

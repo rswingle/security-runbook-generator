@@ -1,0 +1,211 @@
+#!/usr/bin/env node
+const fs = require("fs");
+const path = require("path");
+const { spawnSync } = require("child_process");
+
+const { CLAUDE_FILE, RUNBOOKS_DIR, SCHEMA_FILE } = require("./lib/paths");
+const {
+  ensureProjectScaffold,
+  formatNamingConvention,
+  loadPreferences,
+  normalizeRunbookName,
+  parseTeamRules,
+  readIfExists,
+  readSchema,
+  resolveRunbookPath,
+  savePreferences,
+  saveYamlFile,
+  defaultPreferences
+} = require("./lib/utils");
+
+function usage() {
+  console.log(`Usage:
+  ./runbook init
+  ./runbook new [--no-push] [--template <name>]
+  ./runbook list
+  ./runbook edit <runbook-name>
+  ./runbook templates
+  ./runbook memory --show
+  ./runbook memory --reset`);
+}
+
+function parseFlags(args) {
+  const flags = {};
+  for (let i = 0; i < args.length; i += 1) {
+    const token = args[i];
+    if (!token.startsWith("--")) {
+      continue;
+    }
+    const key = token.slice(2);
+    const next = args[i + 1];
+    if (!next || next.startsWith("--")) {
+      flags[key] = true;
+    } else {
+      flags[key] = next;
+      i += 1;
+    }
+  }
+  return flags;
+}
+
+function initCommand() {
+  ensureProjectScaffold();
+  const templateFiles = [
+    "incident-response.md",
+    "vulnerability-management.md",
+    "access-review.md",
+    "_schema.yaml"
+  ];
+  const missing = templateFiles.filter((fileName) => !fs.existsSync(path.join(path.dirname(SCHEMA_FILE), fileName)));
+  if (missing.length) {
+    console.log(`Missing template assets: ${missing.join(", ")}`);
+    process.exitCode = 1;
+    return;
+  }
+  console.log("Initialized: runbooks/, memory/, templates/playbooks/");
+}
+
+function listCommand() {
+  ensureProjectScaffold();
+  const entries = fs.readdirSync(RUNBOOKS_DIR).filter((file) => file.endsWith(".md")).sort();
+  if (!entries.length) {
+    console.log("No runbooks found.");
+    return;
+  }
+  entries.forEach((entry) => console.log(entry));
+}
+
+function templatesCommand() {
+  ensureProjectScaffold();
+  const schema = readSchema(SCHEMA_FILE);
+  for (const [name, info] of Object.entries(schema.templates || {})) {
+    const description = info.description ? ` - ${info.description}` : "";
+    console.log(`${name}${description}`);
+  }
+}
+
+function editCommand(runbookName) {
+  if (!runbookName) {
+    throw new Error("Missing runbook name.");
+  }
+  const targetPath = resolveRunbookPath(runbookName);
+  if (!fs.existsSync(targetPath)) {
+    throw new Error(`Runbook not found: ${path.basename(targetPath)}`);
+  }
+  const editor = process.env.EDITOR || "vi";
+  const result = spawnSync(editor, [targetPath], { stdio: "inherit" });
+  if (result.status !== 0) {
+    throw new Error(`Editor exited with code ${result.status}`);
+  }
+}
+
+function memoryCommand(flags) {
+  ensureProjectScaffold();
+  if (flags.reset) {
+    saveYamlFile(require("./lib/paths").PREFERENCES_FILE, defaultPreferences());
+    console.log("Reset preferences.");
+    return;
+  }
+  if (flags.show || Object.keys(flags).length === 0) {
+    const prefsRaw = fs.readFileSync(require("./lib/paths").PREFERENCES_FILE, "utf8");
+    console.log(prefsRaw.trim());
+    return;
+  }
+  throw new Error("Unsupported memory flag. Use --show or --reset.");
+}
+
+async function newCommand(flags) {
+  const { collectInput } = require("./agents/ui-builder");
+  const { renderTemplate } = require("./agents/template-engineer");
+  const { commitAndPush, writeRunbook } = require("./agents/integration-agent");
+  const { runPostToolUse } = require("./hooks/post-tool-use");
+  const { runStopHook } = require("./hooks/stop");
+
+  ensureProjectScaffold();
+  runStopHook();
+
+  const schema = readSchema(SCHEMA_FILE);
+  const preferences = loadPreferences();
+  const teamRules = parseTeamRules(readIfExists(CLAUDE_FILE));
+  if (teamRules.length) {
+    console.log(`Loaded ${teamRules.length} team convention(s) from CLAUDE.md`);
+  }
+
+  const { payload, safeFields } = await collectInput({
+    schema,
+    preferences,
+    templateOverride: typeof flags.template === "string" ? flags.template : undefined
+  });
+
+  const templateName = payload.template;
+  const { rendered } = renderTemplate({ templateName, payload });
+  const suggestedName = payload.runbook_name
+    ? normalizeRunbookName(payload.runbook_name).replace(/\.md$/, "")
+    : formatNamingConvention(preferences.naming_convention, payload);
+  const outputPath = writeRunbook({ name: suggestedName, markdown: rendered });
+  const gitResult = commitAndPush({
+    rootDir: path.resolve(__dirname),
+    outputPath,
+    disablePush: Boolean(flags["no-push"])
+  });
+
+  runPostToolUse({
+    template: templateName,
+    outputPath,
+    safeFields,
+    generatedContent: rendered
+  });
+
+  console.log(`Saved ${path.relative(process.cwd(), outputPath)}`);
+  if (gitResult.warning) {
+    console.log(gitResult.warning);
+  } else if (gitResult.pushed) {
+    console.log("Committed and pushed to origin/main.");
+  } else {
+    console.log("Committed locally.");
+  }
+}
+
+async function main() {
+  const argv = process.argv.slice(2);
+  const command = argv[0];
+  const flags = parseFlags(argv.slice(1));
+
+  try {
+    if (!command || command === "help" || command === "--help") {
+      usage();
+      return;
+    }
+    if (command === "init") {
+      initCommand();
+      return;
+    }
+    if (command === "new") {
+      await newCommand(flags);
+      return;
+    }
+    if (command === "list") {
+      listCommand();
+      return;
+    }
+    if (command === "templates") {
+      templatesCommand();
+      return;
+    }
+    if (command === "edit") {
+      editCommand(argv[1]);
+      return;
+    }
+    if (command === "memory") {
+      memoryCommand(flags);
+      return;
+    }
+    usage();
+    process.exitCode = 1;
+  } catch (error) {
+    console.error(`Error: ${error.message}`);
+    process.exitCode = 1;
+  }
+}
+
+main();

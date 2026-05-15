@@ -1,0 +1,4 @@
+node_modules/
+.DS_Store
+memory/.last-generated.md
+memory/.last-generated.json
